@@ -9,7 +9,7 @@ Supaworker is a job queue for Supabase projects.
 ## Usage
 
 Supaworker is a job queue that is backed by your Supabase database.
-Jobs are enqueued as rows in a `supaworker_jobs` table where background workers can pick them up and process them.
+Jobs are enqueued as rows in a `"supaworker"."jobs"` table where background workers can pick them up and process them.
 
 A worker is a Supaworker client does the following:
 
@@ -34,8 +34,6 @@ Then run the migration:
 ```bash
 supabase migration up --local
 ```
-
-From Supabase studio, head to Database -> Replication. In the row named "supabase_realtime", click the "_x_ table(s)" button under the "Source" column and toggle the "supaworker_jobs" table to enabled.
 
 ### Installation
 
