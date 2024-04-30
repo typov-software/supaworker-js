@@ -21,8 +21,8 @@
     "stop": "bunx supabase stop"
   },
   "devDependencies": {
-    "@types/bun": "^1.0.12",
-    "@types/eslint": "^8.56.9",
+    "@types/bun": "^1.1.1",
+    "@types/eslint": "^8.56.10",
     "@typescript-eslint/eslint-plugin": "^7.6.0",
     "@typescript-eslint/parser": "^7.6.0",
     "eslint": "^8.57.0",
@@ -35,7 +35,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.42.3"
+    "@supabase/supabase-js": "^2.42.7"
   },
   "repository": {
     "type": "git",
