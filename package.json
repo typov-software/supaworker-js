@@ -1,0 +1,57 @@
+{
+  "name": "@typov/supaworker-js",
+  "module": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "version": "0.0.0-semantically-released",
+  "description": "Supaworker is a job queue for Supabase projects.",
+  "scripts": {
+    "clean": "rimraf dist docs",
+    "clean:deps": "bun run clean && rimraf node_modules bun.lockb",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "format": "prettier --write \"{src,test}/**/*.ts\"",
+    "build": "bun build --target=node ./src/index.ts --outfile=dist/index.js && bun run build:declaration",
+    "build:declaration": "tsc --emitDeclarationOnly --project tsconfig.types.json",
+    "postbuild": "rimraf tsconfig.types.tsbuildinfo",
+    "docs": "typedoc --entryPoints src/index.ts --out docs",
+    "docs:json": "typedoc --entryPoints src/index.ts --json docs/spec.json --excludeExternals",
+    "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
+    "start": "bunx supabase start",
+    "stop": "bunx supabase stop"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.0.12",
+    "@types/eslint": "^8.56.9",
+    "@typescript-eslint/eslint-plugin": "^7.6.0",
+    "@typescript-eslint/parser": "^7.6.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
+    "typedoc": "^0.25.13"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.42.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/typov-software/supaworker-js.git"
+  },
+  "keywords": [
+    "supabase",
+    "supaworker",
+    "queue",
+    "worker"
+  ],
+  "author": "typov contributors",
+  "license": "MIT",
+  "files": [
+    "dist/*.js",
+    "dist/*.d.ts",
+    "src/*.ts"
+  ]
+}
