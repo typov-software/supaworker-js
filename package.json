@@ -1,5 +1,5 @@
 {
-  "name": "@typov/supaworker-js",
+  "name": "supaworker-js",
   "module": "src/index.ts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

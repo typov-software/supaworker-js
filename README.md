@@ -40,5 +40,5 @@ supabase migration up --local
 Add Supaworker to your project:
 
 ```bash
-npm install --save @typov/supaworker-js
+npm install --save supaworker-js
 ```
