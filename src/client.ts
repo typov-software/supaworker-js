@@ -59,6 +59,9 @@ export interface SupaworkerClientOptions {
    * See: https://supabase.com/docs/guides/api/api-keys#the-servicerole-key
    */
   supabase_service_role_key: string;
+  /**
+   * Supabase client options to pass to the Supabase client.
+   */
   supabase_options?: SupabaseClientOptions<'supaworker'>;
 }
 
