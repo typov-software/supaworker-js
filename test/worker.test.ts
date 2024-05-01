@@ -21,3 +21,29 @@ describe('createSupaworker', () => {
     expect(worker.stop).toBeDefined();
   });
 });
+
+describe('Supaworker', () => {
+  test('should process a job', async () => {
+    const { client, enqueue } = createSupaworkerClient(options);
+    const jobs = await enqueue([{ queue: 'test' }]);
+    const confirm = async () => {
+      const { data } = await client
+        .from('jobs')
+        .select('id')
+        .eq('id', jobs!.at(0)!.id)
+        .maybeSingle();
+      return data;
+    };
+    const worker = createSupaworker(options, { queue: 'test' }, async (job) => {
+      expect(job.id).toBe(jobs!.at(0)!.id);
+    });
+    const pending = await confirm();
+    expect(pending).not.toBeNull();
+    setTimeout(async () => {
+      await worker.stop();
+      const completed = await confirm();
+      expect(completed).toBeNull();
+    }, 500);
+    await worker.start();
+  });
+});
