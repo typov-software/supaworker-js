@@ -7,7 +7,10 @@ import {
 } from './client';
 import { Database, Json } from './database.types';
 
-export interface SupaworkerWorkerOptions {
+/**
+ * Options for a Supaworker.
+ */
+export interface SupaworkerOptions {
   /**
    * The name of the queue to work on.
    */
@@ -20,12 +23,21 @@ export interface SupaworkerWorkerOptions {
    * The number of attempts to make on a job before marking it as failed. Job options take precedence over this.
    */
   max_attempts?: number;
+  /**
+   * Enable logging of job outcomes. Defaults to `false`.
+   */
   enable_logs?: boolean;
 }
 
+/**
+ * A function that handles a job.
+ */
 export type SupaworkerHandler = <Payload>(job: SupaworkerJob<Payload>) => Promise<void>;
 
-export class SupaworkerWorker<Payload> {
+/**
+ * A worker that processes jobs from a queue.
+ */
+export class Supaworker<Payload> {
   private channel: RealtimeChannel | null = null;
   private hasWork = false;
   private working = false;
@@ -34,7 +46,7 @@ export class SupaworkerWorker<Payload> {
     private client: SupabaseClient<Database, 'supaworker'>,
     private enqueue: EnqueueFunction<Payload>,
     private work: SupaworkerHandler,
-    private options: SupaworkerWorkerOptions,
+    private options: SupaworkerOptions,
   ) {}
 
   /**
@@ -60,6 +72,9 @@ export class SupaworkerWorker<Payload> {
     });
   }
 
+  /**
+   * Subscribe to the realtime queue to listen for new jobs.
+   */
   private subscribe() {
     // Listen for new jobs on the queue.
     this.channel = this.client
@@ -80,10 +95,16 @@ export class SupaworkerWorker<Payload> {
       .subscribe();
   }
 
+  /**
+   * Unsubscribe from the realtime queue.
+   */
   private async unsubscribe() {
     await this.channel?.unsubscribe();
   }
 
+  /**
+   * Start working on the queue.
+   */
   async start() {
     console.debug(`Starting work on supaworker: ${this.options.queue}`);
     await this.subscribe();
@@ -127,6 +148,9 @@ export class SupaworkerWorker<Payload> {
     }
   }
 
+  /**
+   * Stop working on the queue.
+   */
   async stop() {
     console.debug(`Stopping work on supaworker: ${this.options.queue}`);
     await this.unsubscribe();
@@ -137,11 +161,11 @@ export class SupaworkerWorker<Payload> {
 /**
  * Create a new worker to work on a queue.
  */
-export function createWorker(
+export function createSupaworker(
   clientOptions: SupaworkerClientOptions,
-  options: SupaworkerWorkerOptions,
+  options: SupaworkerOptions,
   work: SupaworkerHandler,
 ) {
   const { client, enqueue } = createSupaworkerClient(clientOptions);
-  return new SupaworkerWorker(client, enqueue, work, options);
+  return new Supaworker(client, enqueue, work, options);
 }
