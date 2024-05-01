@@ -16,6 +16,7 @@
     "postbuild": "rimraf tsconfig.types.tsbuildinfo",
     "docs": "typedoc --entryPoints src/index.ts --out docs",
     "docs:json": "typedoc --entryPoints src/index.ts --json docs/spec.json --excludeExternals",
+    "db:reset": "bunx supabase db reset --local",
     "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
     "start": "bunx supabase start",
     "stop": "bunx supabase stop"

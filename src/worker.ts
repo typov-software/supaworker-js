@@ -1,5 +1,10 @@
 import { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-import { SupaworkerClientOptions, SupaworkerJob, createSupaworkerClient } from './client';
+import {
+  EnqueueFunction,
+  SupaworkerClientOptions,
+  SupaworkerJob,
+  createSupaworkerClient,
+} from './client';
 import { Database, Json } from './database.types';
 
 export interface SupaworkerWorkerOptions {
@@ -27,7 +32,7 @@ export class SupaworkerWorker<Payload> {
 
   constructor(
     private client: SupabaseClient<Database, 'supaworker'>,
-    private enqueue: (job: SupaworkerJob<Payload>) => Promise<unknown>,
+    private enqueue: EnqueueFunction<Payload>,
     private work: SupaworkerHandler,
     private options: SupaworkerWorkerOptions,
   ) {}
@@ -109,7 +114,7 @@ export class SupaworkerWorker<Payload> {
           console.error('Error working on job:', workError);
           const allowedAttempts = job.options?.max_attempts ?? this.options.max_attempts ?? 1;
           if (job.attempts < allowedAttempts) {
-            await this.enqueue(job);
+            await this.enqueue([job]);
             await this.log('retry', job);
           } else {
             await this.log('failure', job);
