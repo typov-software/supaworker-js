@@ -1,5 +1,5 @@
 import { SupabaseClient, createClient, SupabaseClientOptions } from '@supabase/supabase-js';
-import { Database, Json } from './database.types';
+import { Database } from './database.types';
 
 /**
  * Individual jobs can have custom options that workers can use to override default behavior.
@@ -46,6 +46,29 @@ export interface SupaworkerJob<Payload> {
 }
 
 /**
+ * Type for inserting a new Supaworker job. Alias the `Insert` type for the `jobs` table.
+ */
+export type SupaworkerJobInsert = Database['supaworker']['Tables']['jobs']['Insert'];
+
+/**
+ * Options for creating a new Supaworker job.
+ */
+export interface SupaworkerEnqueueJobOptions<Payload> {
+  /**
+   * The name of the queue this job belongs to.
+   */
+  queue: string;
+  /**
+   * Supaworker JSON options for this job.
+   */
+  options?: SupaworkerJobOptions | null;
+  /**
+   * JSON payload for this job.
+   */
+  payload?: Payload | null;
+}
+
+/**
  * Shared connection options for Supaworker clients.
  */
 export interface SupaworkerClientOptions {
@@ -66,15 +89,23 @@ export interface SupaworkerClientOptions {
 }
 
 /**
+ * A function to enqueue jobs in the Supaworker system.
+ */
+export type EnqueueFunction<Payload> = (
+  jobs: SupaworkerEnqueueJobOptions<Payload>[],
+) => Promise<SupaworkerJob<Payload>[] | null>;
+
+/**
  * Create a Supaworker client and enqueuing function.
  * @param options Client options for the Supaworker client.
  * @returns A supabase client and a function to enqueue jobs.
  */
 export function createSupaworkerClient<Payload>(options: SupaworkerClientOptions): {
   client: SupabaseClient<Database, 'supaworker'>;
-  enqueue: (job: SupaworkerJob<Payload>) => Promise<unknown>;
+  enqueue: EnqueueFunction<Payload>;
 } {
   const { supabase_url, supabase_service_role_key, supabase_options } = options;
+  // Create a Supabase client with the `supaworker` schema.
   const client = createClient<Database>(supabase_url, supabase_service_role_key, {
     ...supabase_options,
     db: {
@@ -82,12 +113,14 @@ export function createSupaworkerClient<Payload>(options: SupaworkerClientOptions
       schema: 'supaworker',
     },
   });
-  const enqueue = async (job: SupaworkerJob<Payload>) => {
-    return await client.from('jobs').insert({
-      ...job,
-      options: job.options as Json,
-      payload: job.payload as Json,
-    });
+  // Create a function to enqueue jobs.
+  const enqueue = async (jobs: SupaworkerEnqueueJobOptions<Payload>[]) => {
+    const { data, error } = await client
+      .from('jobs')
+      .insert(jobs as SupaworkerJobInsert[])
+      .select('*');
+    if (error) throw error;
+    return data as SupaworkerJob<Payload>[] | null;
   };
   return {
     client,
