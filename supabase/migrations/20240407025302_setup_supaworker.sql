@@ -55,3 +55,16 @@ END LOOP;
 RETURN 'success';
 END;
 $$ LANGUAGE 'plpgsql';
+-- Expose custom schema to service_role
+-- https://supabase.com/docs/guides/api/using-custom-schemas
+-- See config.toml for self-hosted Supabase
+GRANT USAGE ON SCHEMA "supaworker" TO service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA "supaworker" TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA "supaworker" TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA "supaworker" TO service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA "supaworker"
+GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA "supaworker"
+GRANT ALL ON ROUTINES TO service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA "supaworker"
+GRANT ALL ON SEQUENCES TO service_role;
