@@ -28,6 +28,13 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - run: supabase start
+      - run: supabase test db
+
       - run: |
           bun install
           bun run lint
