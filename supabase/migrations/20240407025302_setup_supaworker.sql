@@ -44,14 +44,10 @@ ADD CONSTRAINT "logs_pkey" PRIMARY KEY ("id");
 ALTER TABLE "supaworker"."jobs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "supaworker"."logs" ENABLE ROW LEVEL SECURITY;
 -- https://github.com/orgs/supabase/discussions/13680
-CREATE OR REPLACE FUNCTION execute_schema_tables(_schema text, _query text) RETURNS text AS $$
-DECLARE row record;
-BEGIN FOR row IN
-SELECT tablename
-FROM pg_tables AS t
-WHERE t.schemaname = _schema LOOP -- run query
-  EXECUTE format(_query, row.tablename);
-END LOOP;
+CREATE OR REPLACE FUNCTION enable_realtime_supaworker_table(_table text) RETURNS text AS $$ BEGIN EXECUTE format(
+    'ALTER PUBLICATION supabase_realtime ADD TABLE supaworker.%I',
+    _table
+  );
 RETURN 'success';
 END;
 $$ LANGUAGE 'plpgsql';
