@@ -65,14 +65,16 @@ export interface SupaworkerClientOptions {
   supabase_options?: SupabaseClientOptions<'supaworker'>;
 }
 
-export function createSupaworkerClient<Payload>({
-  supabase_url,
-  supabase_service_role_key,
-  supabase_options,
-}: SupaworkerClientOptions): {
+/**
+ * Create a Supaworker client and enqueuing function.
+ * @param options Client options for the Supaworker client.
+ * @returns A supabase client and a function to enqueue jobs.
+ */
+export function createSupaworkerClient<Payload>(options: SupaworkerClientOptions): {
   client: SupabaseClient<Database, 'supaworker'>;
   enqueue: (job: SupaworkerJob<Payload>) => Promise<unknown>;
 } {
+  const { supabase_url, supabase_service_role_key, supabase_options } = options;
   const client = createClient<Database>(supabase_url, supabase_service_role_key, {
     ...supabase_options,
     db: {
@@ -80,14 +82,15 @@ export function createSupaworkerClient<Payload>({
       schema: 'supaworker',
     },
   });
+  const enqueue = async (job: SupaworkerJob<Payload>) => {
+    return await client.from('jobs').insert({
+      ...job,
+      options: job.options as Json,
+      payload: job.payload as Json,
+    });
+  };
   return {
     client,
-    enqueue: async (job: SupaworkerJob<Payload>) => {
-      return await client.from('jobs').insert({
-        ...job,
-        options: job.options as Json,
-        payload: job.payload as Json,
-      });
-    },
+    enqueue,
   };
 }
