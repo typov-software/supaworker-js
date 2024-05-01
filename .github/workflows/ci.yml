@@ -40,3 +40,5 @@ jobs:
           bun run lint
           bun run format
           bun test
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
