@@ -20,7 +20,16 @@ afterEach(async () => {
 
 describe('createSupaworker', () => {
   test('should return a worker', () => {
-    const { worker } = createSupaworker(clientOptions, workerOptions, async () => {});
+    const { worker } = createSupaworker<{ message: string }>(
+      clientOptions,
+      workerOptions,
+      async (job) => {
+        // Type check
+        expect(job).toBeDefined();
+        expect(job.payload).toBeDefined();
+        expect(job.payload?.message).toBeDefined();
+      },
+    );
     expect(worker).toBeDefined();
     expect(worker.start).toBeDefined();
     expect(worker.stop).toBeDefined();

@@ -41,7 +41,7 @@ export interface SupaworkerOptions {
 /**
  * A function that handles a job.
  */
-export type SupaworkerHandler = <Payload>(job: SupaworkerJob<Payload>) => Promise<void>;
+export type SupaworkerHandler<Payload> = (job: SupaworkerJob<Payload>) => Promise<void>;
 
 /**
  * A worker that processes jobs from a queue. Use `createSupaworker` to create a new worker.
@@ -54,7 +54,7 @@ export class Supaworker<Payload> {
   constructor(
     private client: SupabaseClient<Database, 'supaworker'>,
     private enqueue: EnqueueFunction<Payload>,
-    private work: SupaworkerHandler,
+    private work: SupaworkerHandler<Payload>,
     private options: SupaworkerOptions,
   ) {}
 
@@ -192,12 +192,12 @@ export class Supaworker<Payload> {
  * @param work The function to run on each job.
  * @returns The client, enqueue function, and worker.
  */
-export function createSupaworker(
+export function createSupaworker<Payload = unknown>(
   clientOptions: SupaworkerClientOptions,
   workerOptions: SupaworkerOptions,
-  work: SupaworkerHandler,
+  work: SupaworkerHandler<Payload>,
 ) {
-  const { client, enqueue } = createSupaworkerClient(clientOptions);
-  const worker = new Supaworker(client, enqueue, work, workerOptions);
+  const { client, enqueue } = createSupaworkerClient<Payload>(clientOptions);
+  const worker = new Supaworker<Payload>(client, enqueue, work, workerOptions);
   return { client, enqueue, worker };
 }
