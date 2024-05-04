@@ -1,3 +1,4 @@
+create extension if not exists "pgtap" with schema "extensions";
 CREATE SCHEMA IF NOT EXISTS "supaworker";
 CREATE TABLE IF NOT EXISTS "supaworker"."jobs" (
   "id" bigint NOT NULL,
