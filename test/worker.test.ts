@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { SupaworkerClientOptions, createSupaworkerClient } from '../src/client';
-import { createSupaworker } from '../src/worker';
+import { Supaworker, createSupaworker } from '../src/worker';
 
 const options: SupaworkerClientOptions = {
   supabase_url: 'http://localhost:56781',
@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe('createSupaworker', () => {
   test('should return a worker', () => {
-    const worker = createSupaworker(options, { queue: 'test' }, async () => {});
+    const { worker } = createSupaworker(options, { queue: 'test' }, async () => {});
     expect(worker).toBeDefined();
     expect(worker.start).toBeDefined();
     expect(worker.stop).toBeDefined();
@@ -23,20 +23,26 @@ describe('createSupaworker', () => {
 });
 
 describe('Supaworker', () => {
+  let worker: Supaworker<unknown>;
+
+  afterEach(async () => {
+    await worker.stop();
+  });
+
   test('should process a job', async () => {
-    const { client, enqueue } = createSupaworkerClient(options);
-    const jobs = await enqueue([{ queue: 'test' }]);
+    const supaworker = createSupaworker(options, { queue: 'test' }, async (job) => {
+      expect(job.id).toBe(jobs!.at(0)!.id);
+    });
+    worker = supaworker.worker;
+    const jobs = await supaworker.enqueue([{ queue: 'test' }]);
     const confirm = async () => {
-      const { data } = await client
+      const { data } = await supaworker.client
         .from('jobs')
         .select('id')
         .eq('id', jobs!.at(0)!.id)
         .maybeSingle();
       return data;
     };
-    const worker = createSupaworker(options, { queue: 'test' }, async (job) => {
-      expect(job.id).toBe(jobs!.at(0)!.id);
-    });
     const pending = await confirm();
     expect(pending).not.toBeNull();
     setTimeout(async () => {
@@ -45,5 +51,66 @@ describe('Supaworker', () => {
       expect(completed).toBeNull();
     }, 500);
     await worker.start();
+  });
+
+  test('should process multiple jobs', async () => {
+    const supaworker = createSupaworker(options, { queue: 'test' }, async (job) => {
+      expect(jobs!.map((job) => job.id)).toContain(job.id);
+    });
+    worker = supaworker.worker;
+    const jobs = await supaworker.enqueue([
+      { queue: 'test' },
+      { queue: 'test' },
+      { queue: 'test' },
+    ]);
+    const confirm = async () => {
+      const { data } = await supaworker.client
+        .from('jobs')
+        .select('id')
+        .in(
+          'id',
+          jobs!.map((job) => job.id),
+        );
+      return data;
+    };
+    const pending = await confirm();
+    expect(pending).toHaveLength(3);
+    setTimeout(async () => {
+      await worker.stop();
+      const completed = await confirm();
+      expect(completed).toHaveLength(0);
+    }, 1000);
+    await worker.start();
+  });
+
+  test('should process incoming jobs', async () => {
+    const supaworker = createSupaworker(
+      options,
+      {
+        queue: 'test',
+        sleep_ms: 100,
+      },
+      async (job) => {
+        // Expect a job to have been enqueued.
+        expect(job).toBeDefined();
+      },
+    );
+    worker = supaworker.worker;
+    // Start the worker and enqueue a job after 500ms.
+    setTimeout(async () => {
+      await supaworker.enqueue([{ queue: 'test' }]);
+      // Stop the worker 500ms later.
+      setTimeout(async () => {
+        await worker.stop();
+      }, 500);
+    }, 500);
+    // Start with no jobs.
+    const confirm = async () => {
+      const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+      expect(data).toHaveLength(0);
+    };
+    await confirm();
+    await worker.start();
+    await confirm();
   });
 });
