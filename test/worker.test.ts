@@ -98,9 +98,7 @@ describe('Supaworker', () => {
     setTimeout(async () => {
       await supaworker.enqueue([{ queue: 'test' }]);
       // Stop the worker 500ms later.
-      setTimeout(async () => {
-        await worker.stop();
-      }, 500);
+      setTimeout(() => worker.stop(), 500);
     }, 500);
     // Start with no jobs.
     const confirm = async () => {
@@ -118,9 +116,7 @@ describe('Supaworker', () => {
     });
     worker = supaworker.worker;
     await supaworker.enqueue([{ queue: 'test', enabled: false }]);
-    setTimeout(async () => {
-      await worker.stop();
-    }, 500);
+    setTimeout(() => worker.stop(), 500);
     await worker.start();
     const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
     expect(data).toHaveLength(1);
