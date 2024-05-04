@@ -1,4 +1,9 @@
-import { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import {
+  RealtimeChannel,
+  RealtimePostgresInsertPayload,
+  RealtimePostgresUpdatePayload,
+  SupabaseClient,
+} from '@supabase/supabase-js';
 import {
   EnqueueFunction,
   SupaworkerClientOptions,
@@ -81,6 +86,16 @@ export class Supaworker<Payload> {
    * Subscribe to the realtime queue to listen for new jobs.
    */
   private subscribe() {
+    const onJobChange = (
+      payload:
+        | RealtimePostgresInsertPayload<SupaworkerJob<unknown>>
+        | RealtimePostgresUpdatePayload<SupaworkerJob<unknown>>,
+    ) => {
+      // If the job is disabled, we don't need to do anything.
+      if (payload.new.enabled === false) return;
+      // Signal that there is work to be done.
+      this.hasWork = true;
+    };
     // Listen for new jobs on the queue.
     this.channel = this.client
       .channel('jobs')
@@ -92,10 +107,17 @@ export class Supaworker<Payload> {
           event: 'INSERT',
           filter: `queue=eq.${this.options.queue}`,
         },
-        () => {
-          // Signal that there is work to be done.
-          this.hasWork = true;
+        onJobChange,
+      )
+      .on(
+        'postgres_changes',
+        {
+          schema: 'supaworker',
+          table: 'jobs',
+          event: 'UPDATE',
+          filter: `queue=eq.${this.options.queue}`,
         },
+        onJobChange,
       )
       .subscribe();
   }
