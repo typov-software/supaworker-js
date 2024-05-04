@@ -1,21 +1,26 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { SupaworkerClientOptions, createSupaworkerClient } from '../src/client';
-import { Supaworker, createSupaworker } from '../src/worker';
+import { Supaworker, SupaworkerOptions, createSupaworker } from '../src/worker';
 
-const options: SupaworkerClientOptions = {
+const clientOptions: SupaworkerClientOptions = {
   supabase_url: 'http://localhost:56781',
   supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
 
+const workerOptions: SupaworkerOptions = {
+  queue: 'test',
+  sleep_ms: 100,
+};
+
 afterEach(async () => {
-  const { client } = createSupaworkerClient(options);
+  const { client } = createSupaworkerClient(clientOptions);
   await client.from('jobs').delete().not('id', 'is', null);
   await client.from('logs').delete().not('id', 'is', null);
 });
 
 describe('createSupaworker', () => {
   test('should return a worker', () => {
-    const { worker } = createSupaworker(options, { queue: 'test' }, async () => {});
+    const { worker } = createSupaworker(clientOptions, workerOptions, async () => {});
     expect(worker).toBeDefined();
     expect(worker.start).toBeDefined();
     expect(worker.stop).toBeDefined();
@@ -30,7 +35,7 @@ describe('Supaworker', () => {
   });
 
   test('should process a job', async () => {
-    const supaworker = createSupaworker(options, { queue: 'test' }, async (job) => {
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
       expect(job.id).toBe(jobs!.at(0)!.id);
     });
     worker = supaworker.worker;
@@ -54,7 +59,7 @@ describe('Supaworker', () => {
   });
 
   test('should process multiple jobs', async () => {
-    const supaworker = createSupaworker(options, { queue: 'test' }, async (job) => {
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
       expect(jobs!.map((job) => job.id)).toContain(job.id);
     });
     worker = supaworker.worker;
@@ -84,17 +89,10 @@ describe('Supaworker', () => {
   });
 
   test('should process incoming jobs', async () => {
-    const supaworker = createSupaworker(
-      options,
-      {
-        queue: 'test',
-        sleep_ms: 100,
-      },
-      async (job) => {
-        // Expect a job to have been enqueued.
-        expect(job).toBeDefined();
-      },
-    );
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
+      // Expect a job to have been enqueued.
+      expect(job).toBeDefined();
+    });
     worker = supaworker.worker;
     // Start the worker and enqueue a job after 500ms.
     setTimeout(async () => {
@@ -112,5 +110,39 @@ describe('Supaworker', () => {
     await confirm();
     await worker.start();
     await confirm();
+  });
+
+  test('should ignore disabled jobs', async () => {
+    const supaworker = createSupaworker(clientOptions, workerOptions, async () => {
+      expect(true).toBe(false);
+    });
+    worker = supaworker.worker;
+    await supaworker.enqueue([{ queue: 'test', enabled: false }]);
+    setTimeout(async () => {
+      await worker.stop();
+    }, 500);
+    await worker.start();
+    const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+    expect(data).toHaveLength(1);
+  });
+
+  test('should process newly enabled jobs', async () => {
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
+      expect(job.enabled).toBe(true);
+    });
+    worker = supaworker.worker;
+    const jobs = await supaworker.enqueue([{ queue: 'test', enabled: false }]);
+
+    // Enable the job after the worker has started.
+    setTimeout(async () => {
+      const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+      expect(data).toHaveLength(1);
+      await supaworker.client.from('jobs').update({ enabled: true }).eq('id', jobs!.at(0)!.id);
+      setTimeout(() => worker.stop(), 500);
+    }, 500);
+
+    await worker.start();
+    const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+    expect(data).toHaveLength(0);
   });
 });
