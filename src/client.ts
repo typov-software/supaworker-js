@@ -66,6 +66,10 @@ export interface SupaworkerEnqueueJobOptions<Payload> {
    * JSON payload for this job.
    */
   payload?: Payload | null;
+  /**
+   * Disabled jobs will not be processed. Defaults to `true`.
+   */
+  enabled?: boolean;
 }
 
 /**
