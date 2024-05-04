@@ -7,9 +7,9 @@ Supaworker is a job queue for Supabase projects.
 ## Usage
 
 Supaworker is a job queue that is backed by your Supabase database.
-Jobs are enqueued as rows in a `"supaworker"."jobs"` table where background workers can pick them up and process them.
+Jobs are enqueued as rows in a `"supaworker"."jobs"` table where background workers can dequeue and process them.
 
-A worker is a Supaworker client does the following:
+A worker does the following:
 
 1. Dequeues jobs that match the worker's `queue`
 2. Processes jobs until there are none left
@@ -21,21 +21,29 @@ Supaworker is _**not**_ designed to be used with Edge Functions, but instead wit
 
 ### Setup
 
-Create a new migration
+The first integration step is to add the Supaworker schema to your Supabase project.
 
 ```bash
 supabase migration new setup_supaworker
 ```
 
-And add the following SQL from [here](./supabase/migrations/20240407025302_setup_supaworker.sql).
+Carefully review and add the following SQL from [here](./supabase/migrations/20240407025302_setup_supaworker.sql).
 
-Then run the migration:
+Run the migration:
 
 ```bash
 supabase migration up --local
 ```
 
-Add Supaworker to your project:
+Sync the schema to your Supabase project:
+
+```bash
+supabase db lint
+supabase test db
+supabase db push
+```
+
+Add [`supaworker-js`](https://www.npmjs.com/package/supaworker-js) to your project:
 
 ```bash
 npm install --save supaworker-js
@@ -51,6 +59,7 @@ Create a new project
 mkdir my-worker && cd my-worker
 npm init -y
 npm install --save supaworker-js
+touch index.js
 ```
 
 Edit package.json to use ESM modules:
@@ -73,7 +82,6 @@ const clientOptions = {
 
 const workerOptions = {
   queue: "example",
-  debug: true,
 };
 
 const { enqueue, worker } = createSupaworker(
@@ -104,7 +112,7 @@ await worker.stop();
 
 Run the worker:
 
-```sh
+```bash
 SUPABASE_URL="" \
 SUPABASE_SERVICE_ROLE_KEY="" \
 node index.js
@@ -116,7 +124,7 @@ Create a new project
 
 ```bash
 mkdir my-worker && cd my-worker
-bun init -y
+bun init
 bun add supaworker-js
 ```
 
@@ -130,13 +138,12 @@ import {
 } from "supaworker-js";
 
 const clientOptions: SupaworkerClientOptions = {
-  supabase_url: process.env.SUPABASE_URL ?? "",
-  supabase_service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabase_url: import.meta.env.SUPABASE_URL ?? "",
+  supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 };
 
 const workerOptions: SupaworkerOptions = {
   queue: "example",
-  debug: true,
 };
 
 const { enqueue, worker } = createSupaworker<{ message: string }>(
@@ -167,7 +174,7 @@ await worker.stop();
 
 Run the worker:
 
-```sh
+```bash
 SUPABASE_URL="" \
 SUPABASE_SERVICE_ROLE_KEY="" \
 bun run index.ts
