@@ -159,7 +159,7 @@ export class Supaworker<Payload> {
           await this.work(job);
           await this.log('success', job);
         } catch (workError) {
-          console.error('Error working on job:', workError);
+          if (this.options.debug) console.error('Error working on job:', workError);
           const allowedAttempts = job.options?.max_attempts ?? this.options.max_attempts ?? 1;
           if (job.attempts < allowedAttempts) {
             await this.enqueue([job]);
