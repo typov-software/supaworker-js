@@ -27,6 +27,10 @@ export interface SupaworkerOptions {
    * Enable logging of job outcomes. Defaults to `false`.
    */
   enable_logs?: boolean;
+  /**
+   * Enable debug mode. Defaults to `false`.
+   */
+  debug?: boolean;
 }
 
 /**
@@ -35,7 +39,7 @@ export interface SupaworkerOptions {
 export type SupaworkerHandler = <Payload>(job: SupaworkerJob<Payload>) => Promise<void>;
 
 /**
- * A worker that processes jobs from a queue.
+ * A worker that processes jobs from a queue. Use `createSupaworker` to create a new worker.
  */
 export class Supaworker<Payload> {
   private channel: RealtimeChannel | null = null;
@@ -51,6 +55,7 @@ export class Supaworker<Payload> {
 
   /**
    * Remove a job from the queue to do work on.
+   * @param queue_name The name of the queue to get jobs from
    */
   private async dequeue(queue_name: string): Promise<SupaworkerJob<Payload> | null> {
     const { data: job, error } = await this.client.rpc('dequeue', { queue_name }).maybeSingle();
@@ -106,7 +111,7 @@ export class Supaworker<Payload> {
    * Start working on the queue.
    */
   async start() {
-    console.debug(`Starting work on supaworker: ${this.options.queue}`);
+    if (this.options.debug) console.log(`Starting work on queue: ${this.options.queue}`);
     await this.subscribe();
 
     // Start working on the queue.
@@ -152,7 +157,7 @@ export class Supaworker<Payload> {
    * Stop working on the queue.
    */
   async stop() {
-    console.debug(`Stopping work on supaworker: ${this.options.queue}`);
+    if (this.options.debug) console.log(`Stopping work on queue: ${this.options.queue}`);
     await this.unsubscribe();
     this.working = false;
   }
@@ -160,12 +165,17 @@ export class Supaworker<Payload> {
 
 /**
  * Create a new worker to work on a queue.
+ * @param clientOptions Options for the Supabase client.
+ * @param workerOptions Options for the worker.
+ * @param work The function to run on each job.
+ * @returns The client, enqueue function, and worker.
  */
 export function createSupaworker(
   clientOptions: SupaworkerClientOptions,
-  options: SupaworkerOptions,
+  workerOptions: SupaworkerOptions,
   work: SupaworkerHandler,
 ) {
   const { client, enqueue } = createSupaworkerClient(clientOptions);
-  return new Supaworker(client, enqueue, work, options);
+  const worker = new Supaworker(client, enqueue, work, workerOptions);
+  return { client, enqueue, worker };
 }
