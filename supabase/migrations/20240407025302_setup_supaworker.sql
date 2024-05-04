@@ -11,10 +11,10 @@ CREATE TABLE IF NOT EXISTS "supaworker"."jobs" (
 ALTER TABLE "supaworker"."jobs" OWNER TO "postgres";
 CREATE OR REPLACE FUNCTION "supaworker"."dequeue"("queue_name" character varying) RETURNS SETOF "supaworker"."jobs" LANGUAGE "plpgsql" AS $$ #variable_conflict use_variable
   begin return query
-delete from "jobs"
+delete from "supaworker"."jobs"
 where id = (
     select id
-    from "jobs"
+    from "supaworker"."jobs"
     where enabled = true
       and queue = queue_name
     order by created_at asc for
