@@ -44,13 +44,8 @@ ADD CONSTRAINT "logs_pkey" PRIMARY KEY ("id");
 ALTER TABLE "supaworker"."jobs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "supaworker"."logs" ENABLE ROW LEVEL SECURITY;
 -- https://github.com/orgs/supabase/discussions/13680
-CREATE OR REPLACE FUNCTION enable_realtime_supaworker_table(_table text) RETURNS text AS $$ BEGIN EXECUTE format(
-    'ALTER PUBLICATION supabase_realtime ADD TABLE supaworker.%I',
-    _table
-  );
-RETURN 'success';
-END;
-$$ LANGUAGE 'plpgsql';
+ALTER PUBLICATION supabase_realtime
+ADD TABLE supaworker.jobs;
 -- Expose custom schema to service_role
 -- https://supabase.com/docs/guides/api/using-custom-schemas
 -- See config.toml for self-hosted Supabase
