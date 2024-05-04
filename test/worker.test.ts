@@ -150,4 +150,39 @@ describe('Supaworker', () => {
     const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
     expect(data).toHaveLength(0);
   });
+
+  test('should retry failed jobs', async () => {
+    let attempts = 1;
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
+      if (attempts === 1) {
+        attempts += 1;
+        throw new Error('Test error');
+      }
+      expect(job.attempts).toBe(2);
+      await worker.stop();
+    });
+    worker = supaworker.worker;
+    await supaworker.enqueue([{ queue: 'test', options: { max_attempts: 2 } }]);
+    await worker.start();
+    const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+    expect(data).toHaveLength(0);
+    expect(attempts).toBe(2);
+  });
+
+  test('should retry failed jobs up to the maximum attempts', async () => {
+    let attempts = 0;
+    const supaworker = createSupaworker(clientOptions, workerOptions, async (job) => {
+      attempts += 1;
+      expect(job.attempts).toBe(attempts);
+      expect(job.attempts).toBeLessThanOrEqual(3);
+      throw new Error('Test error');
+    });
+    setTimeout(() => worker.stop(), 500);
+    worker = supaworker.worker;
+    await supaworker.enqueue([{ queue: 'test', options: { max_attempts: 3 } }]);
+    await worker.start();
+    const { data } = await supaworker.client.from('jobs').select('id').eq('queue', 'test');
+    expect(data).toHaveLength(0);
+    expect(attempts).toBe(3);
+  });
 });
