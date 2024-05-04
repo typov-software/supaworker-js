@@ -185,4 +185,47 @@ describe('Supaworker', () => {
     expect(data).toHaveLength(0);
     expect(attempts).toBe(3);
   });
+
+  test('should log successful jobs', async () => {
+    const supaworker = createSupaworker(
+      clientOptions,
+      { ...workerOptions, enable_logs: true },
+      async () => {
+        await worker.stop();
+      },
+    );
+    worker = supaworker.worker;
+    const jobs = await supaworker.enqueue([{ queue: 'test' }]);
+    await worker.start();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const { data, error } = await supaworker.client
+      .from('logs')
+      .select('id, status')
+      .eq('job->id', jobs!.at(0)!.id);
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(data![0].status).toBe('success');
+  });
+
+  test('should log failed jobs', async () => {
+    const supaworker = createSupaworker(
+      clientOptions,
+      { ...workerOptions, enable_logs: true },
+      async () => {
+        setTimeout(() => worker.stop(), 500);
+        throw new Error('Test error');
+      },
+    );
+    worker = supaworker.worker;
+    const jobs = await supaworker.enqueue([{ queue: 'test' }]);
+    await worker.start();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const { data, error } = await supaworker.client
+      .from('logs')
+      .select('id, status')
+      .eq('job->id', jobs!.at(0)!.id);
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(data![0].status).toBe('failure');
+  });
 });
