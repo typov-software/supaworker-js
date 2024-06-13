@@ -22,21 +22,21 @@
     "stop": "bunx supabase stop"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.1",
+    "@types/bun": "^1.1.4",
     "@types/eslint": "^8.56.10",
-    "@typescript-eslint/eslint-plugin": "^7.8.0",
-    "@typescript-eslint/parser": "^7.8.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.5",
-    "rimraf": "^5.0.5",
+    "prettier": "^3.3.2",
+    "rimraf": "^5.0.7",
     "typedoc": "^0.25.13"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.43.1"
+    "@supabase/supabase-js": "^2.43.4"
   },
   "repository": {
     "type": "git",
