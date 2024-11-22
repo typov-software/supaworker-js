@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { createSupaworkerClient, SupaworkerClientOptions } from '../src/client';
 
 const options: SupaworkerClientOptions = {
-  supabase_url: 'http://localhost:56781',
+  supabase_url: import.meta.env.SUPABASE_URL ?? 'http://localhost:56781',
   supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
 
