@@ -16,13 +16,6 @@ export default ts.config(
     },
   },
   {
-    languageOptions: {
-      parserOptions: {
-        parser: ts.parser,
-      },
-    },
-  },
-  {
     plugins: {
       'simple-import-sort': simpleImportSort,
     },
