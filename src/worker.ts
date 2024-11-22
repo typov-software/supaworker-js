@@ -4,11 +4,12 @@ import {
   RealtimePostgresUpdatePayload,
   SupabaseClient,
 } from '@supabase/supabase-js';
+
 import {
+  createSupaworkerClient,
   EnqueueFunction,
   SupaworkerClientOptions,
   SupaworkerJob,
-  createSupaworkerClient,
 } from './client';
 import { Database, Json } from './database.types';
 
