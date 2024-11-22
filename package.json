@@ -17,26 +17,31 @@
     "docs": "typedoc --entryPoints src/index.ts --out docs",
     "docs:json": "typedoc --entryPoints src/index.ts --json docs/spec.json --excludeExternals",
     "db:reset": "bunx supabase db reset --local",
+    "db:test": "bunx supabase test db --local",
     "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
     "start": "bunx supabase start",
     "stop": "bunx supabase stop"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.4",
-    "@types/eslint": "^8.56.10",
-    "@typescript-eslint/eslint-plugin": "^7.13.0",
-    "@typescript-eslint/parser": "^7.13.0",
-    "eslint": "^8.57.0",
+    "@eslint/js": "^9.15.0",
+    "@types/bun": "^1.1.13",
+    "@types/eslint": "^9.6.1",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
     "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.3.2",
-    "rimraf": "^5.0.7",
-    "typedoc": "^0.25.13"
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "globals": "^15.12.0",
+    "prettier": "^3.3.3",
+    "rimraf": "^6.0.1",
+    "typedoc": "^0.26.11",
+    "typescript-eslint": "^8.15.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.43.4"
+    "@supabase/supabase-js": "^2.46.1"
   },
   "repository": {
     "type": "git",
