@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { SupaworkerClientOptions, createSupaworkerClient } from '../src/client';
+
+import { createSupaworkerClient, SupaworkerClientOptions } from '../src/client';
 
 const options: SupaworkerClientOptions = {
   supabase_url: 'http://localhost:56781',
