@@ -13,7 +13,7 @@ A worker does the following:
 
 1. Dequeues jobs that match the worker's `queue`
 2. Processes jobs until there are none left
-2. Listens for new jobs using Supabase's Realtime feature
+3. Listens for new jobs using Supabase's Realtime feature
 
 Timeouts, delayed retries, and scale are left to the developer.
 
@@ -33,6 +33,13 @@ Run the migration:
 
 ```bash
 supabase migration up --local
+```
+
+Update your `supabase/config.toml` to include the `supaworker` schema:
+
+```toml
+[api]
+schemas = ["public", "supaworker"]
 ```
 
 Sync the schema to your Supabase project:
@@ -73,35 +80,31 @@ Edit package.json to use ESM modules:
 Basic javascript example:
 
 ```js
-import { createSupaworker } from "supaworker-js";
+import { createSupaworker } from 'supaworker-js';
 
 const clientOptions = {
-  supabase_url: process.env.SUPABASE_URL ?? "",
-  supabase_service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabase_url: process.env.SUPABASE_URL ?? '',
+  supabase_service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
 
 const workerOptions = {
-  queue: "example",
+  queue: 'example',
 };
 
-const { enqueue, worker } = createSupaworker(
-  clientOptions,
-  workerOptions,
-  async (job) => {
-    console.log(job.payload.message);
-  }
-);
+const { enqueue, worker } = createSupaworker(clientOptions, workerOptions, async (job) => {
+  console.log(job.payload.message);
+});
 
 await enqueue([
   {
-    queue: "example",
+    queue: 'example',
     payload: {
-      message: "Hello, World!",
+      message: 'Hello, World!',
     },
   },
 ]);
 
-process.on("SIGINT", async () => {
+process.on('SIGINT', async () => {
   await worker.stop();
   process.exit();
 });
@@ -135,15 +138,15 @@ import {
   createSupaworker,
   type SupaworkerClientOptions,
   type SupaworkerOptions,
-} from "supaworker-js";
+} from 'supaworker-js';
 
 const clientOptions: SupaworkerClientOptions = {
-  supabase_url: import.meta.env.SUPABASE_URL ?? "",
-  supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabase_url: import.meta.env.SUPABASE_URL ?? '',
+  supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
 
 const workerOptions: SupaworkerOptions = {
-  queue: "example",
+  queue: 'example',
 };
 
 const { enqueue, worker } = createSupaworker<{ message: string }>(
@@ -151,19 +154,19 @@ const { enqueue, worker } = createSupaworker<{ message: string }>(
   workerOptions,
   async (job) => {
     console.log(job.payload!.message);
-  }
+  },
 );
 
 await enqueue([
   {
-    queue: "example",
+    queue: 'example',
     payload: {
-      message: "Hello, World!",
+      message: 'Hello, World!',
     },
   },
 ]);
 
-process.on("SIGINT", async () => {
+process.on('SIGINT', async () => {
   await worker.stop();
   process.exit();
 });
