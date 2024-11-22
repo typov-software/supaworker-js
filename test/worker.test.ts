@@ -4,7 +4,7 @@ import { createSupaworkerClient, SupaworkerClientOptions } from '../src/client';
 import { createSupaworker, Supaworker, SupaworkerOptions } from '../src/worker';
 
 const clientOptions: SupaworkerClientOptions = {
-  supabase_url: 'http://localhost:56781',
+  supabase_url: import.meta.env.SUPABASE_URL ?? 'http://localhost:56781',
   supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
 };
 
