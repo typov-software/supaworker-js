@@ -43,7 +43,6 @@ jobs:
 
       - run: bun install
       - run: bun run lint
-      - run: bun run format
 
   test:
     name: Test
@@ -61,11 +60,10 @@ jobs:
         with:
           version: latest
 
-      - run: supabase start
-      - run: supabase test db
+      - run: bun install
+      - run: bun start
+      - run: bun db:test
 
-      - run: |
-          bun install
-          bun test --coverage
+      - run: bun test --coverage
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
