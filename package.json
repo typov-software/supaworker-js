@@ -19,7 +19,7 @@
     "db:reset": "bunx supabase db reset --local",
     "db:test": "bunx supabase test db --local",
     "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
-    "start": "bunx supabase start",
+    "start": "bunx supabase start -x edge-runtime,imgproxy,logflare,mailpit,postgres-meta,studio,supavisor,vector",
     "stop": "bunx supabase stop"
   },
   "devDependencies": {
