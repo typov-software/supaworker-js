@@ -9,8 +9,8 @@
   "scripts": {
     "clean": "rimraf dist docs",
     "clean:deps": "bun run clean && rimraf node_modules bun.lockb",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
-    "format": "prettier --write \"{src,test}/**/*.ts\"",
+    "lint": "prettier --check \"{src,test}/**/*.ts\" && eslint \"{src,test}/**/*.ts\"",
+    "format": "prettier --write \"{src,test}/**/*.ts\" && eslint --fix \"{src,test}/**/*.ts\"",
     "build": "bun build --target=node ./src/index.ts --outfile=dist/index.js && bun run build:declaration",
     "build:declaration": "tsc --emitDeclarationOnly --project tsconfig.types.json",
     "postbuild": "rimraf tsconfig.types.tsbuildinfo",
@@ -19,7 +19,7 @@
     "db:reset": "bunx supabase db reset --local",
     "db:test": "bunx supabase test db --local",
     "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
-    "start": "bunx supabase start",
+    "start": "bunx supabase start -x edge-runtime,imgproxy,logflare,mailpit,postgres-meta,studio,supavisor,vector",
     "stop": "bunx supabase stop"
   },
   "devDependencies": {
