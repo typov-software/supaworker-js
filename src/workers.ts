@@ -279,7 +279,6 @@ export class Supaworker<T> {
   }
 
   private async incrementAttempts(job: JobWithPayload<T>) {
-    // throw new Error('Not implemented');
     const { data, error } = await this.client
       .rpc('increment_attempts', { job_id: job.id })
       .select()
@@ -316,48 +315,79 @@ export class Supaworker<T> {
   private async workOnJob(job: JobWithPayload<T>): Promise<void> {
     try {
       this.console('debug', 'Working on job:', job.id);
-      job = await this.incrementAttempts(job);
+      try {
+        job = await this.incrementAttempts(job);
+      } catch (error) {
+        // We don't retry the job if we fail to increment attempts
+        await this.jobFailed(job, error as Error);
+        return;
+      }
 
-      let timeoutId: NodeJS.Timer | null = null;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          this.console('error', 'Job timed out', job.id);
-          reject(new Error('Job timed out'));
-        }, this.options.job_timeout_ms);
-      });
-
+      const { timeoutId, timeoutPromise } = await this.timeoutJob(job);
       await Promise.race([this.handler(job), timeoutPromise]);
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
 
       // Job was successful
-      this.console('debug', 'Job completed successfully.', job.id);
-      await this.saveLog(LOG_STATUS.SUCCESS, job);
-      job = await this.updateJobStatus(job, JOB_STATUS.SUCCESS);
+      await this.jobSucceeded(job);
     } catch (error) {
       // Error while processing job
       if (job.attempts >= this.options.max_attempts) {
         // Job failed after max attempts
-        try {
-          this.console('error', 'Job failed after max attempts.', error);
-          await this.saveLog(LOG_STATUS.ERROR, job, error as Error);
-          job = await this.updateJobStatus(job, JOB_STATUS.ERROR);
-        } catch (error) {
-          this.console('error', 'Error updating job status after max attempts', error);
-        }
+        await this.jobFailed(job, error as Error);
         return;
       }
 
       // Job failed before max attempts, retry
-      try {
-        this.console('debug', 'Job failed. Retrying...');
-        await this.saveLog(LOG_STATUS.RETRY, job);
-        job = await this.updateJobStatus(job, JOB_STATUS.RETRY);
-      } catch (error) {
-        this.console('error', 'Error updating job status after retry', error);
-        return;
-      }
+      await this.retryJob(job);
+    }
+  }
+
+  private async timeoutJob(job: JobWithPayload<T>) {
+    let timeoutId: NodeJS.Timer | null = null;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        this.console('error', 'Job timed out', job.id);
+        reject(new Error('Job timed out'));
+      }, this.options.job_timeout_ms);
+    });
+    return { timeoutId, timeoutPromise };
+  }
+
+  private async jobSucceeded(job: JobWithPayload<T>) {
+    try {
+      this.console('debug', 'Job completed successfully.', job.id);
+      await Promise.all([
+        this.saveLog(LOG_STATUS.SUCCESS, job),
+        this.updateJobStatus(job, JOB_STATUS.SUCCESS),
+      ]);
+    } catch (error) {
+      this.console('error', 'Error updating job status after success', error);
+    }
+  }
+
+  private async jobFailed(job: JobWithPayload<T>, error: Error) {
+    try {
+      this.console('error', 'Job failed.', error);
+      await Promise.all([
+        this.saveLog(LOG_STATUS.ERROR, job, error),
+        this.updateJobStatus(job, JOB_STATUS.ERROR),
+      ]);
+    } catch (error) {
+      this.console('error', 'Error updating job status after failure', error);
+    }
+  }
+
+  private async retryJob(job: JobWithPayload<T>) {
+    try {
+      this.console('debug', 'Job failed. Retrying...');
+      await Promise.all([
+        this.saveLog(LOG_STATUS.RETRY, job),
+        this.updateJobStatus(job, JOB_STATUS.RETRY),
+      ]);
+    } catch (error) {
+      this.console('error', 'Error updating job status after retry', error);
     }
   }
 }
