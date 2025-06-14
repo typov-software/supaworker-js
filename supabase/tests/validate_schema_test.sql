@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(16);
 -- Check if schema exists
 select has_schema('supaworker');
 -- Check if tables exist
@@ -29,14 +29,14 @@ select has_column(
 select has_column(
     'supaworker',
     'jobs',
-    'queue',
-    'Expected column supaworker.jobs.queue to exist'
+    'claimed_at',
+    'Expected column supaworker.jobs.claimed_at to exist'
   );
 select has_column(
     'supaworker',
     'jobs',
-    'enabled',
-    'Expected column supaworker.jobs.enabled to exist'
+    'queue',
+    'Expected column supaworker.jobs.queue to exist'
   );
 select has_column(
     'supaworker',
@@ -47,15 +47,16 @@ select has_column(
 select has_column(
     'supaworker',
     'jobs',
-    'options',
-    'Expected column supaworker.jobs.options to exist'
+    'payload',
+    'Expected column supaworker.jobs.payload to exist'
   );
 select has_column(
     'supaworker',
     'jobs',
-    'payload',
-    'Expected column supaworker.jobs.payload to exist'
+    'status',
+    'Expected column supaworker.jobs.status to exist'
   );
+-- Logs
 select has_column(
     'supaworker',
     'logs',
@@ -71,14 +72,20 @@ select has_column(
 select has_column(
     'supaworker',
     'logs',
-    'job',
-    'Expected column supaworker.logs.job to exist'
+    'job_id',
+    'Expected column supaworker.logs.job_id to exist'
   );
 select has_column(
     'supaworker',
     'logs',
     'status',
     'Expected column supaworker.logs.status to exist'
+  );
+select has_column(
+    'supaworker',
+    'logs',
+    'error',
+    'Expected column supaworker.logs.error to exist'
   );
 -- Check if functions exist
 select has_function(

@@ -1,0 +1,267 @@
+import {
+  REALTIME_SUBSCRIBE_STATES,
+  type RealtimeChannel,
+  type SupabaseClient,
+} from '@supabase/supabase-js';
+
+import type { Database } from './database.types';
+import { JOB_STATUS, type JobStatus, type JobWithPayload } from './jobs';
+import { type Log, LOG_STATUS, type LogStatus } from './logs';
+
+const colors = {
+  info: '\x1b[34m', // blue
+  warn: '\x1b[33m', // yellow
+  error: '\x1b[31m', // red
+  debug: '\x1b[36m', // cyan
+};
+
+export async function startWorkers<T>(workers: Supaworker<T>[]) {
+  await Promise.allSettled(workers.map((worker) => worker.start()));
+}
+
+export async function stopWorkers<T>(workers: Supaworker<T>[]) {
+  await Promise.allSettled(workers.map((worker) => worker.stop()));
+}
+
+export type SupaworkerHandler<T> = (job: JobWithPayload<T>) => Promise<void>;
+
+export interface SupaworkerOptions {
+  queue: string;
+  concurrency?: number;
+  max_attempts?: number;
+  max_ticks?: number;
+  tick_interval_ms?: number;
+}
+
+export class Supaworker<T> {
+  public readonly id = Math.random().toString(36).substring(2, 15);
+
+  // Initialized in constructor
+  private client: SupabaseClient<Database>;
+  private handler: SupaworkerHandler<T>;
+  private options: Required<SupaworkerOptions>;
+
+  // Worker state
+  private channel: RealtimeChannel | null = null;
+  private hasWork = false;
+  private jobCount = 0;
+  private isWorking = false;
+  private ticks = 0;
+
+  constructor(
+    client: SupabaseClient<Database>,
+    options: SupaworkerOptions,
+    handler: SupaworkerHandler<T>,
+  ) {
+    this.client = client;
+    this.options = {
+      concurrency: 1,
+      max_attempts: 3,
+      max_ticks: 60,
+      tick_interval_ms: 1000,
+      ...options,
+    };
+    this.handler = handler;
+  }
+
+  async stop() {
+    await this.unsubscribe();
+    this.isWorking = false;
+  }
+
+  async start() {
+    this.console('info', 'Starting worker...');
+    this.subscribe();
+    try {
+      await this.work();
+    } finally {
+      await this.stop();
+      this.console('warn', 'Worker stopped.');
+    }
+  }
+
+  private console(level: 'info' | 'warn' | 'error' | 'debug', ...args: unknown[]) {
+    if (process.env.NODE_ENV === 'test') return;
+    console[level](`${colors[level]}${this.options.queue}\x1b[0m.${this.id}`, ...args);
+  }
+
+  private async sleep() {
+    await new Promise((resolve) => setTimeout(resolve, this.options.tick_interval_ms));
+  }
+
+  private async tick() {
+    await this.sleep();
+    this.ticks++;
+  }
+
+  private async saveLog(status: LogStatus, job: JobWithPayload<T>, error?: Error): Promise<Log> {
+    const { data } = await this.client
+      .from('logs')
+      .insert({
+        job_id: job.id,
+        status: status,
+        error: error ? { message: error.message, stack: error.stack } : null,
+      })
+      .throwOnError()
+      .select()
+      .single<Log>();
+    if (!data) {
+      throw new Error('Failed to create log');
+    }
+    return data as Log;
+  }
+
+  private async unsubscribe() {
+    if (this.channel) {
+      const result = await this.channel.unsubscribe();
+      this.channel = null;
+      return result;
+    }
+    return null;
+  }
+
+  private subscribe() {
+    this.channel = this.client
+      .channel(`jobs:${this.options.queue}`)
+      .on(
+        'postgres_changes',
+        {
+          schema: 'supaworker',
+          table: 'jobs',
+          event: 'INSERT',
+          filter: `queue=eq.${this.options.queue}`,
+        },
+        () => {
+          this.console('debug', 'Realtime event received. Checking for work...');
+          this.hasWork = true;
+        },
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          this.console('error', 'Error subscribing to channel', err);
+        }
+        switch (status) {
+          case REALTIME_SUBSCRIBE_STATES.SUBSCRIBED:
+            this.console('debug', 'Subscribed to channel');
+            break;
+          case REALTIME_SUBSCRIBE_STATES.CLOSED:
+            this.console('debug', 'Channel closed');
+            this.isWorking = false;
+            break;
+          case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
+            this.console('error', 'Channel error', err);
+            this.isWorking = false;
+            break;
+          case REALTIME_SUBSCRIBE_STATES.TIMED_OUT:
+            this.console('error', 'Channel timed out');
+            this.isWorking = false;
+            break;
+        }
+      });
+  }
+
+  private async work() {
+    this.console('debug', 'Starting work loop...');
+
+    this.hasWork = true;
+    this.isWorking = true;
+
+    while (this.isWorking) {
+      if (this.jobCount > this.options.concurrency) {
+        this.console('debug', 'Max concurrency reached. Sleeping...');
+        await this.sleep();
+        continue;
+      }
+
+      if (this.options.max_ticks && this.ticks >= this.options.max_ticks) {
+        this.console(
+          'debug',
+          `Max ticks reached after ${(this.ticks * this.options.tick_interval_ms).toLocaleString()}ms. Manually checking for work...`,
+        );
+        this.hasWork = true;
+      }
+
+      if (!this.hasWork) {
+        await this.tick();
+        continue;
+      }
+
+      this.ticks = 0;
+      const job = await this.dequeue();
+      if (job) {
+        this.workOnJob(job);
+      } else {
+        this.hasWork = false;
+      }
+    }
+
+    this.console('debug', 'Work loop ended.');
+  }
+
+  private async dequeue(): Promise<JobWithPayload<T> | null> {
+    const { data, error } = await this.client
+      .rpc('dequeue', { queue_name: this.options.queue })
+      .select()
+      .maybeSingle<JobWithPayload<T>>();
+    if (error) {
+      this.console('error', 'Error dequeuing job', error);
+      return null;
+    }
+    return data ? (data as JobWithPayload<T>) : null;
+  }
+
+  private async incrementAttempts(job: JobWithPayload<T>) {
+    const { data, error } = await this.client
+      .from('jobs')
+      .update({ attempts: job.attempts + 1 })
+      .eq('id', job.id)
+      .select()
+      .single<JobWithPayload<T>>();
+    if (error) {
+      this.console('error', 'Error incrementing attempts', error);
+      throw error;
+    }
+    return data as JobWithPayload<T>;
+  }
+
+  private async updateJobStatus(job: JobWithPayload<T>, status: JobStatus) {
+    const { data, error } = await this.client
+      .from('jobs')
+      .update({ status })
+      .eq('id', job.id)
+      .select()
+      .single<JobWithPayload<T>>();
+    if (error) {
+      this.console('error', 'Error updating job status', error);
+      throw error;
+    }
+    return data as JobWithPayload<T>;
+  }
+
+  private async workOnJob(job: JobWithPayload<T>): Promise<void> {
+    this.jobCount++;
+    job = await this.incrementAttempts(job);
+    try {
+      this.console('debug', 'Working on a job...');
+      await this.handler(job);
+      await this.saveLog(LOG_STATUS.SUCCESS, job);
+      this.console('debug', 'Job completed successfully.');
+      job = await this.updateJobStatus(job, JOB_STATUS.SUCCESS);
+      return;
+    } catch (error) {
+      if (job.attempts >= this.options.max_attempts) {
+        this.console('error', 'Job failed after max attempts.', error);
+        await this.saveLog(LOG_STATUS.ERROR, job, error as Error);
+        job = await this.updateJobStatus(job, JOB_STATUS.ERROR);
+        return;
+      }
+
+      this.console('debug', 'Job failed. Retrying...');
+      job = await this.updateJobStatus(job, JOB_STATUS.RETRY);
+      await this.saveLog(LOG_STATUS.RETRY, job);
+      this.workOnJob(job);
+    } finally {
+      this.jobCount--;
+    }
+  }
+}
