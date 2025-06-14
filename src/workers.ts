@@ -31,6 +31,7 @@ export interface SupaworkerOptions {
   max_attempts?: number;
   max_ticks?: number;
   tick_interval_ms?: number;
+  realtime_subscribe_retries?: number;
 }
 
 export class Supaworker<T> {
@@ -47,6 +48,7 @@ export class Supaworker<T> {
   private jobCount = 0;
   private isWorking = false;
   private ticks = 0;
+  private realtime_subscribe_retries = 0;
 
   constructor(
     client: SupabaseClient<Database>,
@@ -69,6 +71,12 @@ export class Supaworker<T> {
         'Max ticks is 0, worker will never check for work and relies on realtime events only.',
       );
     }
+    if (
+      options.realtime_subscribe_retries !== undefined &&
+      options.realtime_subscribe_retries < 0
+    ) {
+      throw new Error('Realtime subscribe retries must be at least 0');
+    }
     if (options.tick_interval_ms !== undefined && options.tick_interval_ms < 100) {
       throw new Error('Tick interval must be at least 100ms');
     }
@@ -79,6 +87,7 @@ export class Supaworker<T> {
       max_attempts: 3,
       max_ticks: 60,
       tick_interval_ms: 1000,
+      realtime_subscribe_retries: 3,
       ...options,
     };
     this.handler = handler;
@@ -109,8 +118,8 @@ export class Supaworker<T> {
     }
   }
 
-  private async sleep() {
-    await new Promise((resolve) => setTimeout(resolve, this.options.tick_interval_ms));
+  private async sleep(ms?: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms ?? this.options.tick_interval_ms));
   }
 
   private async tick() {
@@ -144,44 +153,61 @@ export class Supaworker<T> {
     return null;
   }
 
-  private async subscribe() {
-    await this.unsubscribe();
-    this.channel = this.client
-      .channel(`jobs:${this.options.queue}`)
-      .on(
-        'postgres_changes',
-        {
-          schema: 'supaworker',
-          table: 'jobs',
-          event: 'INSERT',
-          filter: `queue=eq.${this.options.queue}`,
-        },
-        () => {
-          this.console('debug', 'Realtime event received. Checking for work...');
-          this.hasWork = true;
-        },
-      )
-      .subscribe(async (status, err) => {
-        if (err) {
-          this.console('error', 'Error subscribing to channel', err);
-        }
-        switch (status) {
-          case REALTIME_SUBSCRIBE_STATES.SUBSCRIBED:
-            this.console('debug', 'Subscribed to channel');
-            break;
-          case REALTIME_SUBSCRIBE_STATES.CLOSED:
-            this.console('debug', 'Channel closed, worker is stopped or stopping...');
-            this.isWorking = false;
-            break;
-          case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
-            this.console('error', 'Channel error', err);
-            break;
-          case REALTIME_SUBSCRIBE_STATES.TIMED_OUT:
-            this.console('error', 'Channel timed out');
-            await this.subscribe();
-            break;
-        }
-      });
+  private async subscribe(): Promise<void> {
+    try {
+      await this.unsubscribe();
+      this.channel = this.client
+        .channel(`jobs:${this.options.queue}`)
+        .on(
+          'postgres_changes',
+          {
+            schema: 'supaworker',
+            table: 'jobs',
+            event: 'INSERT',
+            filter: `queue=eq.${this.options.queue}`,
+          },
+          () => {
+            this.console('debug', 'Realtime event received. Checking for work...');
+            this.hasWork = true;
+          },
+        )
+        .subscribe(async (status, err) => {
+          if (err) {
+            this.console('error', 'Error subscribing to channel', err);
+          }
+          switch (status) {
+            case REALTIME_SUBSCRIBE_STATES.SUBSCRIBED:
+              this.console('debug', 'Subscribed to channel');
+              break;
+            case REALTIME_SUBSCRIBE_STATES.CLOSED:
+              this.console('debug', 'Channel closed, worker is stopped or stopping...');
+              this.isWorking = false;
+              break;
+            case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
+              this.console('error', 'Channel error', err);
+              break;
+            case REALTIME_SUBSCRIBE_STATES.TIMED_OUT:
+              this.console('error', 'Channel timed out');
+              await this.retrySubscription();
+              break;
+          }
+        });
+    } catch (error) {
+      await this.retrySubscription();
+      throw error;
+    }
+  }
+
+  private async retrySubscription(): Promise<void> {
+    if (this.options.realtime_subscribe_retries > this.realtime_subscribe_retries) {
+      this.console(
+        'warn',
+        `Subscription failed, retrying... (${this.options.realtime_subscribe_retries - this.realtime_subscribe_retries} attempts left)`,
+      );
+      await this.sleep(1000);
+      this.realtime_subscribe_retries++;
+      return this.subscribe();
+    }
   }
 
   private async work() {
