@@ -243,15 +243,14 @@ export class Supaworker<T> {
   }
 
   private async workOnJob(job: JobWithPayload<T>): Promise<void> {
-    this.jobCount++;
-    job = await this.incrementAttempts(job);
     try {
-      this.console('debug', 'Working on a job...');
+      this.jobCount++;
+      this.console('debug', 'Working on job:', job.id);
+      job = await this.incrementAttempts(job);
       await this.handler(job);
       await this.saveLog(LOG_STATUS.SUCCESS, job);
-      this.console('debug', 'Job completed successfully.');
       job = await this.updateJobStatus(job, JOB_STATUS.SUCCESS);
-      return;
+      this.console('debug', 'Job completed successfully.', job.id);
     } catch (error) {
       if (job.attempts >= this.options.max_attempts) {
         this.console('error', 'Job failed after max attempts.', error);
