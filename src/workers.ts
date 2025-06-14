@@ -94,8 +94,12 @@ export class Supaworker<T> {
   }
 
   async stop() {
-    await this.unsubscribe();
     this.isWorking = false;
+    await this.unsubscribe();
+    this.hasWork = false;
+    this.jobCount = 0;
+    this.ticks = 0;
+    this.realtime_subscribe_retries = 0;
   }
 
   async start() {
