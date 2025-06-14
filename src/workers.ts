@@ -71,7 +71,7 @@ export class Supaworker<T> {
 
   async start() {
     this.console('info', 'Starting worker...');
-    this.subscribe();
+    await this.subscribe();
     try {
       await this.work();
     } finally {
@@ -124,7 +124,8 @@ export class Supaworker<T> {
     return null;
   }
 
-  private subscribe() {
+  private async subscribe() {
+    await this.unsubscribe();
     this.channel = this.client
       .channel(`jobs:${this.options.queue}`)
       .on(
@@ -140,7 +141,7 @@ export class Supaworker<T> {
           this.hasWork = true;
         },
       )
-      .subscribe((status, err) => {
+      .subscribe(async (status, err) => {
         if (err) {
           this.console('error', 'Error subscribing to channel', err);
         }
@@ -149,16 +150,15 @@ export class Supaworker<T> {
             this.console('debug', 'Subscribed to channel');
             break;
           case REALTIME_SUBSCRIBE_STATES.CLOSED:
-            this.console('debug', 'Channel closed');
+            this.console('debug', 'Channel closed, worker is stopped or stopping...');
             this.isWorking = false;
             break;
           case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
             this.console('error', 'Channel error', err);
-            this.isWorking = false;
             break;
           case REALTIME_SUBSCRIBE_STATES.TIMED_OUT:
             this.console('error', 'Channel timed out');
-            this.isWorking = false;
+            await this.subscribe();
             break;
         }
       });
