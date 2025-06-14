@@ -255,7 +255,7 @@ export class Supaworker<T> {
       .eq('id', job.id)
       .select()
       .single<JobWithPayload<T>>();
-    if (error) {
+    if (error || !data) {
       this.console('error', 'Error updating job status', error);
       throw error;
     }
@@ -282,7 +282,10 @@ export class Supaworker<T> {
       this.console('debug', 'Job failed. Retrying...');
       job = await this.updateJobStatus(job, JOB_STATUS.RETRY);
       await this.saveLog(LOG_STATUS.RETRY, job);
-      this.workOnJob(job);
+      // Don't await this, it will block the worker from processing other jobs
+      this.workOnJob(job).catch((error) => {
+        this.console('error', 'Error retrying', error);
+      });
     } finally {
       this.jobCount = Math.max(0, this.jobCount - 1);
     }
