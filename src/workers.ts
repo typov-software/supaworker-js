@@ -211,41 +211,46 @@ export class Supaworker<T> {
   }
 
   private async work() {
-    this.console('debug', 'Starting work loop...');
+    try {
+      this.console('debug', 'Starting work loop...');
 
-    this.hasWork = true;
-    this.isWorking = true;
+      this.hasWork = true;
+      this.isWorking = true;
 
-    while (this.isWorking) {
-      if (this.jobCount > this.options.concurrency) {
-        this.console('debug', 'Max concurrency reached. Sleeping...');
-        await this.sleep();
-        continue;
+      while (this.isWorking) {
+        if (this.jobCount > this.options.concurrency) {
+          this.console('debug', 'Max concurrency reached. Sleeping...');
+          await this.sleep();
+          continue;
+        }
+
+        if (this.options.max_ticks !== 0 && this.ticks >= this.options.max_ticks) {
+          this.console(
+            'debug',
+            `Max ticks reached after ${(this.ticks * this.options.tick_interval_ms).toLocaleString()}ms. Manually checking for work...`,
+          );
+          this.hasWork = true;
+        }
+
+        if (!this.hasWork) {
+          await this.tick();
+          continue;
+        }
+
+        this.ticks = 0;
+        const job = await this.dequeue();
+        if (job) {
+          this.workOnJob(job);
+        } else {
+          this.hasWork = false;
+        }
       }
 
-      if (this.options.max_ticks !== 0 && this.ticks >= this.options.max_ticks) {
-        this.console(
-          'debug',
-          `Max ticks reached after ${(this.ticks * this.options.tick_interval_ms).toLocaleString()}ms. Manually checking for work...`,
-        );
-        this.hasWork = true;
-      }
-
-      if (!this.hasWork) {
-        await this.tick();
-        continue;
-      }
-
-      this.ticks = 0;
-      const job = await this.dequeue();
-      if (job) {
-        this.workOnJob(job);
-      } else {
-        this.hasWork = false;
-      }
+      this.console('debug', 'Work loop ended.');
+    } catch (error) {
+      this.console('error', 'Fatal error in work loop', error);
+      await this.stop();
     }
-
-    this.console('debug', 'Work loop ended.');
   }
 
   private async dequeue(): Promise<JobWithPayload<T> | null> {
