@@ -12,6 +12,7 @@ export type Database = {
           payload: Json | null;
           queue: string;
           status: string;
+          updated_at: string;
         };
         Insert: {
           attempts?: number;
@@ -21,6 +22,7 @@ export type Database = {
           payload?: Json | null;
           queue: string;
           status: string;
+          updated_at?: string;
         };
         Update: {
           attempts?: number;
@@ -30,6 +32,7 @@ export type Database = {
           payload?: Json | null;
           queue?: string;
           status?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -80,6 +83,20 @@ export type Database = {
           payload: Json | null;
           queue: string;
           status: string;
+          updated_at: string;
+        }[];
+      };
+      increment_attempts: {
+        Args: { job_id: number };
+        Returns: {
+          attempts: number;
+          claimed_at: string | null;
+          created_at: string;
+          id: number;
+          payload: Json | null;
+          queue: string;
+          status: string;
+          updated_at: string;
         }[];
       };
     };

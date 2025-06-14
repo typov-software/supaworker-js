@@ -27,7 +27,7 @@ The first integration step is to add the Supaworker schema to your Supabase proj
 supabase migration new setup_supaworker
 ```
 
-Carefully review and add the following SQL from [here](./supabase/migrations/20250524033517_setup_supaworker.sql).
+Carefully review and add the following SQL migrations from [here](./supabase/migrations).
 
 Run the migration:
 

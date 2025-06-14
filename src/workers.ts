@@ -27,7 +27,7 @@ export type SupaworkerHandler<T> = (job: JobWithPayload<T>) => Promise<void>;
 
 export interface SupaworkerOptions {
   queue: string;
-  concurrency?: number;
+  job_timeout_ms?: number;
   max_attempts?: number;
   max_ticks?: number;
   tick_interval_ms?: number;
@@ -45,7 +45,6 @@ export class Supaworker<T> {
   // Worker state
   private channel: RealtimeChannel | null = null;
   private hasWork = false;
-  private jobCount = 0;
   private isWorking = false;
   private ticks = 0;
   private realtime_subscribe_retries = 0;
@@ -56,8 +55,8 @@ export class Supaworker<T> {
     handler: SupaworkerHandler<T>,
   ) {
     // Validate options
-    if (options.concurrency !== undefined && options.concurrency < 1) {
-      throw new Error('Concurrency must be at least 1');
+    if (options.job_timeout_ms !== undefined && options.job_timeout_ms < 0) {
+      throw new Error('Job timeout must be at least 0ms');
     }
     if (options.max_attempts !== undefined && options.max_attempts < 1) {
       throw new Error('Max attempts must be at least 1');
@@ -83,7 +82,7 @@ export class Supaworker<T> {
 
     this.client = client;
     this.options = {
-      concurrency: 1,
+      job_timeout_ms: 5000,
       max_attempts: 3,
       max_ticks: 60,
       tick_interval_ms: 1000,
@@ -97,7 +96,6 @@ export class Supaworker<T> {
     this.isWorking = false;
     await this.unsubscribe();
     this.hasWork = false;
-    this.jobCount = 0;
     this.ticks = 0;
     this.realtime_subscribe_retries = 0;
   }
@@ -113,7 +111,7 @@ export class Supaworker<T> {
     }
   }
 
-  private console(level: 'info' | 'warn' | 'error' | 'debug', ...args: unknown[]) {
+  console(level: 'info' | 'warn' | 'error' | 'debug', ...args: unknown[]) {
     if (process.env.NODE_ENV === 'test') return;
     if (process.env.NODE_ENV === 'development') {
       console[level](`${colors[level]}${this.options.queue}\x1b[0m.${this.id}`, ...args);
@@ -175,6 +173,21 @@ export class Supaworker<T> {
             this.hasWork = true;
           },
         )
+        .on(
+          'postgres_changes',
+          {
+            schema: 'supaworker',
+            table: 'jobs',
+            event: 'UPDATE',
+            filter: `queue=eq.${this.options.queue}`,
+          },
+          (payload) => {
+            if (payload.new.claimed_at === null) {
+              this.console('debug', 'Realtime event received. Checking for work...');
+              this.hasWork = true;
+            }
+          },
+        )
         .subscribe(async (status, err) => {
           if (err) {
             this.console('error', 'Error subscribing to channel', err);
@@ -212,6 +225,8 @@ export class Supaworker<T> {
       this.realtime_subscribe_retries++;
       return this.subscribe();
     }
+    this.console('error', 'Failed to subscribe to channel');
+    await this.stop();
   }
 
   private async work() {
@@ -222,12 +237,6 @@ export class Supaworker<T> {
       this.isWorking = true;
 
       while (this.isWorking) {
-        if (this.jobCount > this.options.concurrency) {
-          this.console('debug', 'Max concurrency reached. Sleeping...');
-          await this.sleep();
-          continue;
-        }
-
         if (this.options.max_ticks !== 0 && this.ticks >= this.options.max_ticks) {
           this.console(
             'debug',
@@ -244,7 +253,7 @@ export class Supaworker<T> {
         this.ticks = 0;
         const job = await this.dequeue();
         if (job) {
-          this.workOnJob(job);
+          await this.workOnJob(job);
         } else {
           this.hasWork = false;
         }
@@ -270,15 +279,15 @@ export class Supaworker<T> {
   }
 
   private async incrementAttempts(job: JobWithPayload<T>) {
+    // throw new Error('Not implemented');
     const { data, error } = await this.client
-      .from('jobs')
-      .update({ attempts: job.attempts + 1 })
-      .eq('id', job.id)
+      .rpc('increment_attempts', { job_id: job.id })
       .select()
       .single<JobWithPayload<T>>();
-    if (error) {
-      this.console('error', 'Error incrementing attempts', error);
-      throw error;
+    if (error || !data) {
+      const err = error ?? new Error('No data returned');
+      this.console('error', 'Error incrementing attempts', err);
+      throw err;
     }
     return data as JobWithPayload<T>;
   }
@@ -286,43 +295,69 @@ export class Supaworker<T> {
   private async updateJobStatus(job: JobWithPayload<T>, status: JobStatus) {
     const { data, error } = await this.client
       .from('jobs')
-      .update({ status })
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+        claimed_at: status === JOB_STATUS.RETRY ? null : job.claimed_at,
+      })
       .eq('id', job.id)
+      // Only update the job if the current status matches our current job state before update
+      .eq('status', job.status)
       .select()
       .single<JobWithPayload<T>>();
     if (error || !data) {
-      this.console('error', 'Error updating job status', error);
-      throw error;
+      const err = error ?? new Error('No data returned');
+      this.console('error', 'Error updating job status', err);
+      throw err;
     }
     return data as JobWithPayload<T>;
   }
 
   private async workOnJob(job: JobWithPayload<T>): Promise<void> {
     try {
-      this.jobCount++;
       this.console('debug', 'Working on job:', job.id);
       job = await this.incrementAttempts(job);
-      await this.handler(job);
+
+      let timeoutId: NodeJS.Timer | null = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          this.console('error', 'Job timed out', job.id);
+          reject(new Error('Job timed out'));
+        }, this.options.job_timeout_ms);
+      });
+
+      await Promise.race([this.handler(job), timeoutPromise]);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // Job was successful
+      this.console('debug', 'Job completed successfully.', job.id);
       await this.saveLog(LOG_STATUS.SUCCESS, job);
       job = await this.updateJobStatus(job, JOB_STATUS.SUCCESS);
-      this.console('debug', 'Job completed successfully.', job.id);
     } catch (error) {
+      // Error while processing job
       if (job.attempts >= this.options.max_attempts) {
-        this.console('error', 'Job failed after max attempts.', error);
-        await this.saveLog(LOG_STATUS.ERROR, job, error as Error);
-        job = await this.updateJobStatus(job, JOB_STATUS.ERROR);
+        // Job failed after max attempts
+        try {
+          this.console('error', 'Job failed after max attempts.', error);
+          await this.saveLog(LOG_STATUS.ERROR, job, error as Error);
+          job = await this.updateJobStatus(job, JOB_STATUS.ERROR);
+        } catch (error) {
+          this.console('error', 'Error updating job status after max attempts', error);
+        }
         return;
       }
 
-      this.console('debug', 'Job failed. Retrying...');
-      job = await this.updateJobStatus(job, JOB_STATUS.RETRY);
-      await this.saveLog(LOG_STATUS.RETRY, job);
-      // Don't await this, it will block the worker from processing other jobs
-      this.workOnJob(job).catch((error) => {
-        this.console('error', 'Error retrying', error);
-      });
-    } finally {
-      this.jobCount = Math.max(0, this.jobCount - 1);
+      // Job failed before max attempts, retry
+      try {
+        this.console('debug', 'Job failed. Retrying...');
+        await this.saveLog(LOG_STATUS.RETRY, job);
+        job = await this.updateJobStatus(job, JOB_STATUS.RETRY);
+      } catch (error) {
+        this.console('error', 'Error updating job status after retry', error);
+        return;
+      }
     }
   }
 }
