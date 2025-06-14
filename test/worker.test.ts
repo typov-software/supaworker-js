@@ -21,6 +21,35 @@ const client = createClient<Database>(
 );
 
 describe('Supaworker', () => {
+  test('should throw an error if concurrency is less than 1', () => {
+    expect(
+      () => new Supaworker<TestPayload>(client, { queue: 'test', concurrency: 0 }, async () => {}),
+    ).toThrow('Concurrency must be at least 1');
+  });
+
+  test('should throw an error if max_attempts is less than 1', () => {
+    expect(
+      () => new Supaworker<TestPayload>(client, { queue: 'test', max_attempts: 0 }, async () => {}),
+    ).toThrow('Max attempts must be at least 1');
+  });
+
+  test('should throw an error if max_ticks is less than 0', () => {
+    expect(
+      () => new Supaworker<TestPayload>(client, { queue: 'test', max_ticks: -1 }, async () => {}),
+    ).toThrow('Max ticks must be at least 0');
+  });
+
+  test('should throw an error if tick_interval_ms is less than 100', () => {
+    expect(
+      () =>
+        new Supaworker<TestPayload>(
+          client,
+          { queue: 'test', tick_interval_ms: 99 },
+          async () => {},
+        ),
+    ).toThrow('Tick interval must be at least 100ms');
+  });
+
   test('should process a job', async (done) => {
     await enqueueJobs<TestPayload>(client, [{ queue: 'test', payload: { message: 'test' } }]);
     const worker = new Supaworker<TestPayload>(client, { queue: 'test' }, async (job) => {
@@ -113,11 +142,15 @@ describe('Supaworker', () => {
   });
 
   test('should log successful jobs', async () => {
-    const worker = new Supaworker<TestPayload>(client, { queue: 'test' }, async (job) => {
-      expect(job).toBeDefined();
-      expect(job.payload).toBeDefined();
-      await worker.stop();
-    });
+    const worker = new Supaworker<TestPayload>(
+      client,
+      { queue: 'test', tick_interval_ms: 100 },
+      async (job) => {
+        expect(job).toBeDefined();
+        expect(job.payload).toBeDefined();
+        await worker.stop();
+      },
+    );
     const jobs = await enqueueJobs<TestPayload>(client, [
       { queue: 'test', payload: { message: 'test' } },
     ]);

@@ -53,6 +53,26 @@ export class Supaworker<T> {
     options: SupaworkerOptions,
     handler: SupaworkerHandler<T>,
   ) {
+    // Validate options
+    if (options.concurrency !== undefined && options.concurrency < 1) {
+      throw new Error('Concurrency must be at least 1');
+    }
+    if (options.max_attempts !== undefined && options.max_attempts < 1) {
+      throw new Error('Max attempts must be at least 1');
+    }
+    if (options.max_ticks !== undefined && options.max_ticks < 0) {
+      throw new Error('Max ticks must be at least 0');
+    }
+    if (options.max_ticks === 0) {
+      this.console(
+        'warn',
+        'Max ticks is 0, worker will never check for work and relies on realtime events only.',
+      );
+    }
+    if (options.tick_interval_ms !== undefined && options.tick_interval_ms < 100) {
+      throw new Error('Tick interval must be at least 100ms');
+    }
+
     this.client = client;
     this.options = {
       concurrency: 1,
@@ -177,7 +197,7 @@ export class Supaworker<T> {
         continue;
       }
 
-      if (this.options.max_ticks && this.ticks >= this.options.max_ticks) {
+      if (this.options.max_ticks !== 0 && this.ticks >= this.options.max_ticks) {
         this.console(
           'debug',
           `Max ticks reached after ${(this.ticks * this.options.tick_interval_ms).toLocaleString()}ms. Manually checking for work...`,
