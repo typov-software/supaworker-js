@@ -82,7 +82,11 @@ export class Supaworker<T> {
 
   private console(level: 'info' | 'warn' | 'error' | 'debug', ...args: unknown[]) {
     if (process.env.NODE_ENV === 'test') return;
-    console[level](`${colors[level]}${this.options.queue}\x1b[0m.${this.id}`, ...args);
+    if (process.env.NODE_ENV === 'development') {
+      console[level](`${colors[level]}${this.options.queue}\x1b[0m.${this.id}`, ...args);
+    } else {
+      console[level](`${this.options.queue}.${this.id}`, ...args);
+    }
   }
 
   private async sleep() {
