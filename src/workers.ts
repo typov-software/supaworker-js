@@ -264,7 +264,7 @@ export class Supaworker<T> {
       await this.saveLog(LOG_STATUS.RETRY, job);
       this.workOnJob(job);
     } finally {
-      this.jobCount--;
+      this.jobCount = Math.max(0, this.jobCount - 1);
     }
   }
 }
