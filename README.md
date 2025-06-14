@@ -27,7 +27,7 @@ The first integration step is to add the Supaworker schema to your Supabase proj
 supabase migration new setup_supaworker
 ```
 
-Carefully review and add the following SQL from [here](./supabase/migrations/20240407025302_setup_supaworker.sql).
+Carefully review and add the following SQL from [here](./supabase/migrations/20250524033517_setup_supaworker.sql).
 
 Run the migration:
 
@@ -58,6 +58,8 @@ npm install --save supaworker-js
 
 ### Examples
 
+See the [examples](./examples) directory for more.
+
 #### Node.js
 
 Create a new project
@@ -77,40 +79,40 @@ Edit package.json to use ESM modules:
 }
 ```
 
-Basic javascript example:
+Basic node example (see [examples/node](./examples/node)):
 
 ```js
-import { createSupaworker } from 'supaworker-js';
+import { createClient } from '@supabase/supabase-js';
+import { enqueueJobs, startWorkers, stopWorkers, Supaworker } from 'supaworker-js';
 
-const clientOptions = {
-  supabase_url: process.env.SUPABASE_URL ?? '',
-  supabase_service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
-};
-
-const workerOptions = {
-  queue: 'example',
-};
-
-const { enqueue, worker } = createSupaworker(clientOptions, workerOptions, async (job) => {
-  console.log(job.payload.message);
+const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+  db: {
+    schema: 'supaworker',
+  },
 });
 
-await enqueue([
+const worker = new Supaworker(
+  client,
   {
     queue: 'example',
-    payload: {
-      message: 'Hello, World!',
-    },
+  },
+  async (job) => {
+    console.log('Working on a job with message:', job.payload.message);
+  },
+);
+
+const [job] = await enqueueJobs(client, [
+  {
+    queue: 'example',
+    payload: { message: 'Hello via Node!' },
   },
 ]);
 
-process.on('SIGINT', async () => {
-  await worker.stop();
-  process.exit();
-});
+console.log('Job enqueued:', job.id);
 
-await worker.start();
-await worker.stop();
+await startWorkers([worker]);
+
+process.exit(0);
 ```
 
 Run the worker:
@@ -119,66 +121,4 @@ Run the worker:
 SUPABASE_URL="" \
 SUPABASE_SERVICE_ROLE_KEY="" \
 node index.js
-```
-
-#### Bun
-
-Create a new project
-
-```bash
-mkdir my-worker && cd my-worker
-bun init
-bun add supaworker-js
-```
-
-Basic typescript example:
-
-```ts
-import {
-  createSupaworker,
-  type SupaworkerClientOptions,
-  type SupaworkerOptions,
-} from 'supaworker-js';
-
-const clientOptions: SupaworkerClientOptions = {
-  supabase_url: import.meta.env.SUPABASE_URL ?? '',
-  supabase_service_role_key: import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
-};
-
-const workerOptions: SupaworkerOptions = {
-  queue: 'example',
-};
-
-const { enqueue, worker } = createSupaworker<{ message: string }>(
-  clientOptions,
-  workerOptions,
-  async (job) => {
-    console.log(job.payload!.message);
-  },
-);
-
-await enqueue([
-  {
-    queue: 'example',
-    payload: {
-      message: 'Hello, World!',
-    },
-  },
-]);
-
-process.on('SIGINT', async () => {
-  await worker.stop();
-  process.exit();
-});
-
-await worker.start();
-await worker.stop();
-```
-
-Run the worker:
-
-```bash
-SUPABASE_URL="" \
-SUPABASE_SERVICE_ROLE_KEY="" \
-bun run index.ts
 ```

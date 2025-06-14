@@ -18,9 +18,11 @@
     "docs:json": "typedoc --entryPoints src/index.ts --json docs/spec.json --excludeExternals",
     "db:reset": "bunx supabase db reset --local",
     "db:test": "bunx supabase test db --local",
-    "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts",
-    "start": "bunx supabase start -x edge-runtime,imgproxy,logflare,mailpit,postgres-meta,studio,supavisor,vector",
-    "stop": "bunx supabase stop"
+    "db:types": "bunx supabase gen types typescript --local --schema supaworker > src/database.types.ts && bun format",
+    "start": "bunx supabase start -x edge-runtime,imgproxy,logflare,mailpit,supavisor,vector",
+    "stop": "bunx supabase stop",
+    "examples:bun": "bun run examples/bun/index.ts",
+    "examples:node": "node examples/node/index.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
