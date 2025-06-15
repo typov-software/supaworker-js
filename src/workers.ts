@@ -31,6 +31,7 @@ export interface SupaworkerOptions {
   max_attempts?: number;
   max_ticks?: number;
   tick_interval_ms?: number;
+  realtime?: boolean;
   realtime_subscribe_retries?: number;
 }
 
@@ -86,6 +87,7 @@ export class Supaworker<T> {
       max_attempts: 3,
       max_ticks: 60,
       tick_interval_ms: 1000,
+      realtime: true,
       realtime_subscribe_retries: 3,
       ...options,
     };
@@ -147,7 +149,7 @@ export class Supaworker<T> {
   }
 
   private async unsubscribe(): Promise<void> {
-    if (this.channel) {
+    if (this.options.realtime && this.channel) {
       try {
         await this.channel.unsubscribe();
         this.channel = null;
@@ -159,6 +161,11 @@ export class Supaworker<T> {
   }
 
   private async subscribe(): Promise<void> {
+    if (!this.options.realtime) {
+      // If realtime is disabled, check for work immediately
+      this.hasWork = true;
+      return;
+    }
     try {
       await this.unsubscribe();
       this.channel = this.client
