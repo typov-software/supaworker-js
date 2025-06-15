@@ -87,7 +87,7 @@ describe('Supaworker', () => {
   test('should process incoming jobs', async (done) => {
     const worker = new Supaworker<TestPayload>(
       client,
-      { queue: 'test', tick_interval_ms: 100 },
+      { queue: 'test', tick_interval_ms: 100, max_ticks: 2 },
       async (job) => {
         expect(job).toBeDefined();
         expect(job.payload).toBeDefined();
