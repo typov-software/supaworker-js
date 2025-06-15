@@ -21,6 +21,36 @@ const client = createClient<Database>(
 );
 
 describe('Supaworker', () => {
+  test('should throw an error if job_timeout_ms is less than 0', () => {
+    expect(
+      () =>
+        new Supaworker<TestPayload>(client, { queue: 'test', job_timeout_ms: -1 }, async () => {}),
+    ).toThrow('Job timeout must be at least 0ms');
+  });
+
+  test('should throw an error if max_attempts is less than 1', () => {
+    expect(
+      () => new Supaworker<TestPayload>(client, { queue: 'test', max_attempts: 0 }, async () => {}),
+    ).toThrow('Max attempts must be at least 1');
+  });
+
+  test('should throw an error if max_ticks is less than 0', () => {
+    expect(
+      () => new Supaworker<TestPayload>(client, { queue: 'test', max_ticks: -1 }, async () => {}),
+    ).toThrow('Max ticks must be at least 0');
+  });
+
+  test('should throw an error if tick_interval_ms is less than 100', () => {
+    expect(
+      () =>
+        new Supaworker<TestPayload>(
+          client,
+          { queue: 'test', tick_interval_ms: 99 },
+          async () => {},
+        ),
+    ).toThrow('Tick interval must be at least 100ms');
+  });
+
   test('should process a job', async (done) => {
     await enqueueJobs<TestPayload>(client, [{ queue: 'test', payload: { message: 'test' } }]);
     const worker = new Supaworker<TestPayload>(client, { queue: 'test' }, async (job) => {
@@ -113,11 +143,15 @@ describe('Supaworker', () => {
   });
 
   test('should log successful jobs', async () => {
-    const worker = new Supaworker<TestPayload>(client, { queue: 'test' }, async (job) => {
-      expect(job).toBeDefined();
-      expect(job.payload).toBeDefined();
-      await worker.stop();
-    });
+    const worker = new Supaworker<TestPayload>(
+      client,
+      { queue: 'test', tick_interval_ms: 100 },
+      async (job) => {
+        expect(job).toBeDefined();
+        expect(job.payload).toBeDefined();
+        await worker.stop();
+      },
+    );
     const jobs = await enqueueJobs<TestPayload>(client, [
       { queue: 'test', payload: { message: 'test' } },
     ]);
@@ -141,7 +175,7 @@ describe('Supaworker', () => {
   test('should log retries and failed jobs', async () => {
     const worker = new Supaworker<TestPayload>(
       client,
-      { queue: 'test', max_attempts: 3 },
+      { queue: 'test', max_attempts: 2 },
       async (job) => {
         expect(job).toBeDefined();
         expect(job.payload).toBeDefined();
@@ -160,6 +194,28 @@ describe('Supaworker', () => {
       .throwOnError();
     expect(logs.some((log) => log.status === LOG_STATUS.RETRY)).toBe(true);
     expect(logs.some((log) => log.status === LOG_STATUS.ERROR)).toBe(true);
+    const { data: job } = await client
+      .from('jobs')
+      .select()
+      .eq('id', jobs[0].id)
+      .single()
+      .throwOnError();
+    expect(job.status).toBe(JOB_STATUS.ERROR);
+  });
+
+  test('should timeout jobs', async () => {
+    const worker = new Supaworker<TestPayload>(
+      client,
+      { queue: 'test', job_timeout_ms: 100 },
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      },
+    );
+    const jobs = await enqueueJobs<TestPayload>(client, [
+      { queue: 'test', payload: { message: 'test' } },
+    ]);
+    worker.start();
+    await new Promise((resolve) => setTimeout(resolve, 500));
     const { data: job } = await client
       .from('jobs')
       .select()
