@@ -13,5 +13,7 @@ $function$;
 
 ALTER FUNCTION "supaworker"."increment_attempts" ("job_id" bigint) OWNER TO "postgres";
 
+CREATE INDEX jobs_queue_claimed_at_idx ON supaworker.jobs(queue, claimed_at);
+
 ALTER PUBLICATION supabase_realtime
 ADD TABLE supaworker.logs;

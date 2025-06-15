@@ -146,13 +146,16 @@ export class Supaworker<T> {
     return data as Log;
   }
 
-  private async unsubscribe() {
+  private async unsubscribe(): Promise<void> {
     if (this.channel) {
-      const result = await this.channel.unsubscribe();
-      this.channel = null;
-      return result;
+      try {
+        await this.channel.unsubscribe();
+        this.channel = null;
+      } catch (error) {
+        this.console('error', 'Error unsubscribing from channel', error);
+        throw error;
+      }
     }
-    return null;
   }
 
   private async subscribe(): Promise<void> {
@@ -261,8 +264,12 @@ export class Supaworker<T> {
 
       this.console('debug', 'Work loop ended.');
     } catch (error) {
-      this.console('error', 'Fatal error in work loop', error);
-      await this.stop();
+      try {
+        this.console('error', 'Fatal error in work loop', error);
+        await this.stop();
+      } catch (error) {
+        this.console('error', 'Error stopping worker', error);
+      }
     }
   }
 
@@ -302,6 +309,7 @@ export class Supaworker<T> {
       .eq('id', job.id)
       // Only update the job if the current status matches our current job state before update
       .eq('status', job.status)
+      .eq('claimed_at', job.claimed_at!)
       .select()
       .single<JobWithPayload<T>>();
     if (error || !data) {
@@ -313,6 +321,7 @@ export class Supaworker<T> {
   }
 
   private async workOnJob(job: JobWithPayload<T>): Promise<void> {
+    let timeoutId: NodeJS.Timer | null = null;
     try {
       this.console('debug', 'Working on job:', job.id);
       try {
@@ -323,15 +332,15 @@ export class Supaworker<T> {
         return;
       }
 
-      const { timeoutId, timeoutPromise } = await this.timeoutJob(job);
-      await Promise.race([this.handler(job), timeoutPromise]);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      const timeout = await this.timeoutJob(job);
+      timeoutId = timeout.timeoutId;
+      await Promise.race([this.handler(job), timeout.timeoutPromise]);
+      if (timeoutId) clearTimeout(timeoutId);
 
       // Job was successful
       await this.jobSucceeded(job);
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
       // Error while processing job
       if (job.attempts >= this.options.max_attempts) {
         // Job failed after max attempts
