@@ -207,7 +207,7 @@ export class Supaworker<T> {
               this.console('debug', 'Subscribed to channel');
               break;
             case REALTIME_SUBSCRIBE_STATES.CLOSED:
-              this.console('debug', 'Channel closed, worker is stopped or stopping...');
+              this.console('debug', 'Channel closed, retrying subscription...');
               await this.retrySubscription();
               break;
             case REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR:
